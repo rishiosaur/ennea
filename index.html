@@ -5,6 +5,13 @@
 </body>
 <script type="module">
     import htm from 'https://unpkg.com/htm?module'
+    import jss from 'https://unpkg.com/jss?module/'
+    import preset from 'https://unpkg.com/jss-preset-default?module/'
+    import color from 'https://unpkg.com/color?module/'
+
+    jss.setup(preset())
+
+
 
     const h = (tag, props, ...children) => {
         // console.log(children)
@@ -12,7 +19,7 @@
 
             const instance = new tag(props)
             instance.__node = instance.view()
-            instance?.componentDidMount()
+            // instance?.componentDidMount()
 
             return {...instance.__node, classComponent: true, instance}
         }
@@ -48,8 +55,6 @@
                 })
             }
             if (prop.toString().startsWith("on")) {
-
-                // console.log(prop.split("on"))
                 const event = prop.substring(2).toLowerCase()
                 element.addEventListener(event, node.props[prop])
             }
@@ -57,21 +62,16 @@
 
         if (node.children) {
             for (const child of node.children) {
-                // console.log(child)
                 const c = render(child)
-                // console.log(c)
                 element.appendChild(c)
             }
         }
 
-        console.log(element)
 
         if (node?.classComponent) {
             node.instance.__elem = element
+            node.instance.onRender()
         }
-        console.log(node)
-
-
 
         return element
     }
@@ -120,7 +120,6 @@
                 })
             }
 
-            // Object.keys(oldP).forEach((k) => console.log(k))
             for (const k in oldP) {
                 if (!(k in newP)) {
                     patches.push((node) => {
@@ -177,7 +176,7 @@
 
 
     const NumT = props => {
-        return html`<p>${props.num}</p>`
+        return html`<p>${props}</p>`
     }
 
     class Component {
@@ -199,6 +198,10 @@
         }
 
         view() {}
+
+        onMount() {}
+
+        styles() {}
     }
 
     Component.prototype.__isBoxClassComponent = true
@@ -212,7 +215,7 @@
             }
         }
 
-        componentDidMount() {
+        async onRender() {
             setInterval(() => {
                 this.setState({
                     nums: this.state.nums.concat(12),
@@ -221,13 +224,20 @@
             }, 3000)
         }
 
+        updateNums = () => {
+            this.setState({
+                nums: this.state.nums.concat(12),
+                color: Math.floor(Math.random()*16777215).toString(16)
+            })
+        }
+
         view() {
             return html`
 <div style=${{
     color: `#${this.state.color}`
-            }} onClick=${() => console.log('hello')}>
+            }} onClick=${this.updateNums}>
 ${
-                this.state.nums.map(num => html`<${NumT} num=${num}/>`)
+                this.state.nums.map(num => NumT(num))
             }
 </div>
 `
