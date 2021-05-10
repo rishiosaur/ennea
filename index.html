@@ -1,0 +1,243 @@
+<html>
+<body>
+<div id="root">
+</div>
+</body>
+<script type="module">
+    import htm from 'https://unpkg.com/htm?module'
+
+    const h = (tag, props, ...children) => {
+        // console.log(children)
+        if (tag?.prototype && tag.prototype?.__isBoxClassComponent) {
+
+            const instance = new tag(props)
+            instance.__node = instance.view()
+            instance?.componentDidMount()
+
+            return {...instance.__node, classComponent: true, instance}
+        }
+
+        if (typeof tag === 'function') {
+            // console.log(node.tag(node.props))
+            return tag(props)
+        }
+
+        return {
+            tag, props, children: children.flat()
+        }
+    };
+
+    const html = htm.bind(h);
+
+    // console.log(html`<p>${3}</p>`)
+
+    const isText = t => ['string', 'number', 'boolean'].includes(typeof t)
+
+    const render = (node) => {
+        console.log({node, t: isText(node)})
+        if (isText(node)) {
+            return document.createTextNode(node.toString())
+        }
+
+        const element = document.createElement(node.tag)
+        for (const prop in node.props) {
+            element.setAttribute(prop, node.props[prop])
+            if (prop === "style") {
+                Object.entries(node.props[prop]).forEach(([k, v]) => {
+                    element.style[k] = v
+                })
+            }
+            if (prop.toString().startsWith("on")) {
+
+                // console.log(prop.split("on"))
+                const event = prop.substring(2).toLowerCase()
+                element.addEventListener(event, node.props[prop])
+            }
+        }
+
+        if (node.children) {
+            for (const child of node.children) {
+                // console.log(child)
+                const c = render(child)
+                // console.log(c)
+                element.appendChild(c)
+            }
+        }
+
+        console.log(element)
+
+        if (node?.classComponent) {
+            node.instance.__elem = element
+        }
+        console.log(node)
+
+
+
+        return element
+    }
+
+    const mount = (vnode, root) => {
+        root.replaceWith(vnode)
+        return vnode
+    }
+
+    const diff = (old, nn) => {
+        const renderAndReplace = (node) => {
+            const newNode = render(nn)
+            node.replaceWith(newNode)
+            return newNode
+        }
+
+        if (nn === undefined) {
+            return n => {
+                n.remove()
+                return undefined
+            }
+        }
+
+        if (isText(old) || isText(nn)) {
+            if (old !== nn) {
+                return renderAndReplace
+            } else {
+                return n => n
+            }
+        }
+
+        if (old.tag !== nn.tag) {
+            return renderAndReplace
+        }
+
+        const diffProps = (oldP, newP) => {
+            const patches = []
+            if (newP) {
+                Object.entries(newP).forEach(([k, v]) => {
+                    patches.push((node) => {
+                        if (k === 'style') {
+                            Object.entries(v).forEach(([p, v]) => node.style[p] = v)
+                        } else node.setAttribute(k, v)
+                        return node
+                    })
+                })
+            }
+
+            // Object.keys(oldP).forEach((k) => console.log(k))
+            for (const k in oldP) {
+                if (!(k in newP)) {
+                    patches.push((node) => {
+                        node.removeAttribute(k)
+                        return node
+                    })
+                }
+            }
+
+            return (node) => {
+                for (const patch of patches) patch(node)
+                return node
+            }
+        }
+
+
+        const zip = (xs, ys) => Array.from(Array(Math.min(xs.length, ys.length))).map((v, i) => [xs[i], ys[i]])
+
+        const diffChildren = (oldVChildren, newVChildren) => {
+            const childPatches = [];
+
+            oldVChildren.forEach((oldVChild, i) => {
+                childPatches.push(diff(oldVChild, newVChildren[i]));
+            });
+
+            const additionalPatches = [];
+            for (const additionalVChild of newVChildren.slice(oldVChildren.length)) {
+                additionalPatches.push($node => {
+                    $node.appendChild(render(additionalVChild));
+                    return $node;
+                });
+            }
+
+            return $parent => {
+
+                zip(childPatches, $parent.childNodes).forEach(([p, c]) => p(c))
+                additionalPatches.forEach(p => p($parent))
+
+                return $parent;
+            };
+        };
+
+        const patchProps = diffProps(old.props, nn.props)
+        const patchChildren = diffChildren(old.children, nn.children)
+
+        return (node) => {
+            // console.log({node})
+            patchProps(node)
+            patchChildren(node)
+            return node
+        }
+
+    }
+
+
+    const NumT = props => {
+        return html`<p>${props.num}</p>`
+    }
+
+    class Component {
+        constructor(props) {
+            this.props = props
+        }
+
+        setState(state) {
+            console.log(this)
+            this.state = {
+                ...this.state,
+                ...state
+            }
+            const old = this.__node
+                const newNode = this.view()
+                const d = diff(old, newNode)
+                d(this.__elem)
+                this.__node = newNode
+        }
+
+        view() {}
+    }
+
+    Component.prototype.__isBoxClassComponent = true
+
+    class App extends Component {
+        constructor() {
+            super();
+            this.state = {
+                nums: [0, 1, 3],
+                color: "black"
+            }
+        }
+
+        componentDidMount() {
+            setInterval(() => {
+                this.setState({
+                    nums: this.state.nums.concat(12),
+                    color: Math.floor(Math.random()*16777215).toString(16)
+                })
+            }, 3000)
+        }
+
+        view() {
+            return html`
+<div style=${{
+    color: `#${this.state.color}`
+            }} onClick=${() => console.log('hello')}>
+${
+                this.state.nums.map(num => html`<${NumT} num=${num}/>`)
+            }
+</div>
+`
+        }
+    }
+
+    // let vApp = ;
+    // console.log(vApp)
+    const $app = render(html`<${App}/>`);
+    // console.log($app)
+    let $rootEl = mount($app, document.getElementById('root'));
+</script>
+</html>
