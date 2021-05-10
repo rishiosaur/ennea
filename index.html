@@ -7,12 +7,11 @@
     import htm from 'https://unpkg.com/htm?module'
 
     const h = (tag, props, ...children) => {
-        // console.log(children)
         if (tag?.prototype && tag.prototype?.__isBoxClassComponent) {
 
             const instance = new tag(props)
             instance.__node = instance.view()
-            instance?.componentDidMount()
+            // instance?.onMount()
 
             return {...instance.__node, classComponent: true, instance}
         }
@@ -28,8 +27,6 @@
     };
 
     const html = htm.bind(h);
-
-    // console.log(html`<p>${3}</p>`)
 
     const isText = t => ['string', 'number', 'boolean'].includes(typeof t)
 
@@ -48,8 +45,6 @@
                 })
             }
             if (prop.toString().startsWith("on")) {
-
-                // console.log(prop.split("on"))
                 const event = prop.substring(2).toLowerCase()
                 element.addEventListener(event, node.props[prop])
             }
@@ -57,21 +52,18 @@
 
         if (node.children) {
             for (const child of node.children) {
-                // console.log(child)
+
                 const c = render(child)
-                // console.log(c)
+
                 element.appendChild(c)
             }
         }
 
-        console.log(element)
 
         if (node?.classComponent) {
             node.instance.__elem = element
+            node.instance.onMount()
         }
-        console.log(node)
-
-
 
         return element
     }
@@ -183,6 +175,7 @@
     class Component {
         constructor(props) {
             this.props = props
+
         }
 
         setState(state) {
@@ -191,52 +184,132 @@
                 ...this.state,
                 ...state
             }
-            const old = this.__node
-                const newNode = this.view()
-                const d = diff(old, newNode)
-                d(this.__elem)
-                this.__node = newNode
+            this.reconcile()
         }
 
         view() {}
+
+        onMount() {}
+
+        reconcile() {
+            const old = this.__node
+            const newNode = this.view()
+            const d = diff(old, newNode)
+            d(this.__elem)
+            this.__node = newNode
+        }
+
+        bind(contexts) {
+            Object.assign(this, contexts)
+            for (const [k, v] of Object.entries(contexts)) {
+                v.bind(this)
+            }
+        }
+
+        unbind(key) {
+            this.contexts[key].unbind(this)
+        }
     }
 
     Component.prototype.__isBoxClassComponent = true
 
-    class App extends Component {
-        constructor() {
-            super();
-            this.state = {
-                nums: [0, 1, 3],
-                color: "black"
+    class Context {
+        constructor(object) {
+            this.object = object
+            this.components = []
+        }
+
+        bind(component) {
+            this.components = this.components.concat(component)
+        }
+
+        update(obj) {
+            if (typeof obj === 'function') {
+                this.object = {
+                    ...this.object,
+                    ...obj(this)
+                }
+            }
+            else {
+                this.object = {
+                    ...this.object,
+                    ...obj
+                }
+            }
+
+            for (const component of this.components) {
+                component.reconcile()
             }
         }
 
-        componentDidMount() {
+        unbind(component) {
+            this.components = this.components.filter(z => z !== component)
+        }
+
+        static from(object) {
+            return new Context(object)
+        }
+
+        get(key) {
+            return this.object[key]
+        }
+    }
+
+    const s = Context.from({
+        nums: [0, 1, 3],
+        color: "black"
+    })
+
+    class App extends Component {
+        constructor() {
+            super();
+            this.bind({
+                s
+            })
+        }
+
+        onMount() {
             setInterval(() => {
-                this.setState({
-                    nums: this.state.nums.concat(12),
+                this.s.update((z) => ({
+                    nums: z.get('nums').concat(12),
                     color: Math.floor(Math.random()*16777215).toString(16)
-                })
-            }, 3000)
+                }))
+            }, 500)
+
+
         }
 
         view() {
             return html`
 <div style=${{
-    color: `#${this.state.color}`
+    color: `#${this.s.object.color}`
             }} onClick=${() => console.log('hello')}>
 ${
-                this.state.nums.map(num => html`<${NumT} num=${num}/>`)
+                this.s.object.nums.map(num => html`<${NumT} num=${num}/>`)
             }
 </div>
 `
         }
     }
 
+    class Color extends  Component {
+        constructor() {
+            super();
+
+            this.bind({ s })
+        }
+
+        view() {
+            return html`
+<p>${this.s.get('color')}</p>
+`
+        }
+    }
+
+
     // let vApp = ;
     // console.log(vApp)
-    const $app = render(html`<${App}/>`);
+    const $app = render(html`<div><${Color}/><${App}/></div>`);
     // console.log($app)
     let $rootEl = mount($app, document.getElementById('root'));
 </script>
