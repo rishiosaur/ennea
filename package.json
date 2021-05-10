@@ -1,0 +1,14 @@
+{
+  "name": "ennea",
+  "version": "0.0.1",
+  "description": "A tiny view management library",
+  "main": "index.js",
+  "repository": "https://github.com/rishiosaur/ennea.git",
+  "author": "Rishi Kothari <itsrishikothari@gmail.com>",
+  "license": "MIT",
+  "private": false,
+  "dependencies": {
+    "htm": "^3.0.4",
+    "scoped-style": "^1.9.0"
+  }
+}
